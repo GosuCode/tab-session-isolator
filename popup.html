@@ -107,26 +107,38 @@
     }
     .secondary:hover { background: var(--soft-hover); }
     .search { margin-bottom: 4px; }
-    .domain { margin-bottom: 12px; }
+    .domain { margin-bottom: 14px; }
+    .domain-header-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
     .domain-header {
       display: flex;
       align-items: center;
       gap: 5px;
-      width: 100%;
+      flex: 1;
+      min-width: 0;
       font: inherit;
       font-size: 11px;
       font-weight: 600;
       color: var(--muted);
-      margin-bottom: 5px;
       padding: 2px 0;
       background: none;
       border: none;
       text-align: left;
       cursor: pointer;
-      word-break: break-all;
     }
     .domain-header:hover { color: var(--fg); }
-    .domain-header .domain-name { flex: 1; word-break: break-all; }
+    .domain-header .globe { flex: none; }
+    .domain-header .domain-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .domain-header .count {
       flex: none;
       font-weight: 500;
@@ -140,27 +152,68 @@
       transform: rotate(-90deg);
     }
     .domain-header[aria-expanded="true"] .caret { transform: rotate(0deg); }
-    .domain-header.single {
-      cursor: default;
+    .domain-header.single { cursor: default; }
+    .add-tab-btn {
+      flex: none;
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      font-size: 11px;
+      color: var(--muted);
+      text-decoration: underline;
+      cursor: pointer;
+      white-space: nowrap;
     }
+    .add-tab-btn:hover { color: var(--fg); }
+    .domain-items { display: flex; flex-direction: column; }
     .domain-items.collapsed { display: none; }
-    .profile {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px 10px;
-      margin-bottom: 6px;
-    }
-    .profile-top {
+    .tree-row {
+      position: relative;
+      padding: 5px 0 5px 18px;
+      margin-left: 3px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
     }
+    .tree-row::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--line);
+    }
+    .tree-row:last-child::before { bottom: 50%; }
+    .tree-row::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 50%;
+      width: 11px;
+      height: 1px;
+      background: var(--line);
+    }
+    .profile-main {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+    .profile-dot {
+      flex: none;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .profile-text { min-width: 0; }
     .profile-name { font-weight: 600; }
     .profile-meta {
       color: var(--muted);
       font-size: 11.5px;
-      margin-top: 2px;
+      margin-top: 1px;
       word-break: break-all;
     }
     .actions { display: flex; gap: 6px; flex: none; }
@@ -173,6 +226,13 @@
     .launch:hover, .edit:hover { background: var(--soft-hover); }
     .edit { background: none; border: 1px solid var(--line); }
     .edit:hover { background: var(--soft); }
+    .launch-all-btn {
+      background: var(--soft);
+      color: var(--fg);
+      padding: 5px 10px;
+      font-size: 11.5px;
+    }
+    .launch-all-btn:hover { background: var(--soft-hover); }
     .empty { color: var(--muted); font-size: 12px; }
     .vault-panel {
       border: 1px solid var(--line);
@@ -206,6 +266,9 @@
       text-decoration: underline;
       cursor: pointer;
     }
+    .full-link { margin-top: 14px; }
+    .form-panel { margin-top: 14px; }
+    .toast[hidden] { display: none; }
     .toast {
       display: flex;
       align-items: flex-start;
@@ -272,42 +335,49 @@
     <button type="button" id="vaultLockBtn" class="link-btn">Lock</button>
   </div>
 
-  <form id="createForm">
-    <label>Profile name
-      <input type="text" id="profileName" placeholder="Account 1" autocomplete="off">
+  <div id="profilesSection">
+    <h2>Saved profiles</h2>
+    <label class="search">Search
+      <input type="search" id="profileSearch" placeholder="Name, email, or domain" autocomplete="off">
     </label>
-    <label>Email
-      <input type="email" id="email" placeholder="you@example.com" autocomplete="off">
-    </label>
-    <label>Password
-      <span class="pw">
-        <input type="password" id="password" placeholder="Password" autocomplete="new-password">
-        <button type="button" id="togglePassword" class="eye" aria-label="Show password" aria-pressed="false">
-          <svg id="eyeShow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-            <circle cx="12" cy="12" r="3"></circle>
-          </svg>
-          <svg id="eyeHide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden>
-            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
-            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
-            <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path>
-            <line x1="1" y1="1" x2="23" y2="23"></line>
-          </svg>
-        </button>
-      </span>
-    </label>
-    <label>URL
-      <input type="url" id="url" placeholder="https://example.com" autocomplete="off">
-    </label>
-    <button type="submit" class="primary" id="createBtn">Create profile</button>
-    <button type="button" class="secondary" id="cancelBtn" hidden>Cancel edit</button>
-  </form>
+    <div id="profileList"></div>
 
-  <h2>Saved profiles</h2>
-  <label class="search">Search
-    <input type="search" id="profileSearch" placeholder="Name, email, or domain" autocomplete="off">
-  </label>
-  <div id="profileList"></div>
+    <button type="button" id="createForCurrentBtn" class="secondary full-link">+ Create new profile for current site</button>
+  </div>
+
+  <div id="createFormPanel" class="form-panel" hidden>
+    <h2 id="formHeading">New profile</h2>
+    <form id="createForm">
+      <label>Profile name
+        <input type="text" id="profileName" placeholder="Account 1" autocomplete="off">
+      </label>
+      <label>Email
+        <input type="email" id="email" placeholder="you@example.com" autocomplete="off">
+      </label>
+      <label>Password
+        <span class="pw">
+          <input type="password" id="password" placeholder="Password" autocomplete="new-password">
+          <button type="button" id="togglePassword" class="eye" aria-label="Show password" aria-pressed="false">
+            <svg id="eyeShow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <svg id="eyeHide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden>
+              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+              <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path>
+              <line x1="1" y1="1" x2="23" y2="23"></line>
+            </svg>
+          </button>
+        </span>
+      </label>
+      <label>URL
+        <input type="url" id="url" placeholder="https://example.com" autocomplete="off">
+      </label>
+      <button type="submit" class="primary" id="createBtn">Create profile</button>
+      <button type="button" class="secondary" id="cancelBtn">← Back</button>
+    </form>
+  </div>
 
   <script src="popup.js"></script>
 </body>
