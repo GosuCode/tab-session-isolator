@@ -21,6 +21,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   const vaultSetupForm = document.getElementById("vaultSetupForm");
   const vaultUnlockForm = document.getElementById("vaultUnlockForm");
   const vaultLockBtn = document.getElementById("vaultLockBtn");
+  const forgotPasswordBtn = document.getElementById("forgotPasswordBtn");
+  const vaultResetSection = document.getElementById("vaultResetConfirm");
+  const vaultResetInput = document.getElementById("vaultResetConfirmInput");
+  const vaultResetConfirmBtn = document.getElementById("vaultResetConfirmBtn");
+  const vaultResetCancelBtn = document.getElementById("vaultResetCancelBtn");
   const toast = document.getElementById("toast");
   const toastMsg = document.getElementById("toastMsg");
   const toastClose = document.getElementById("toastClose");
@@ -64,10 +69,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const locked = exists && !unlocked;
     vaultSetupSection.hidden = exists;
     vaultLockedSection.hidden = !locked;
+    vaultResetSection.hidden = true;
     vaultUnlockedBar.hidden = !(exists && unlocked);
-    // While locked, the vault-locked panel is the only thing shown — no
-    // browsing/creating profiles until the user unlocks it.
-    profilesSection.hidden = locked;
+    // While the vault is locked or not yet set up, its panel is the only
+    // thing shown — no browsing/creating profiles until it's unlocked.
+    profilesSection.hidden = !exists || locked;
     vaultReady = exists && unlocked;
     if (locked) closeForm();
     updateFormPanelVisibility();
@@ -112,6 +118,37 @@ document.addEventListener("DOMContentLoaded", async () => {
     await sendMessage({ action: "VAULT_LOCK" });
     closeForm();
     await refreshVaultUI();
+  });
+
+  // Forgetting the master password has no recovery — it's never stored, only
+  // used to derive the encryption key — so the only way forward is a reset.
+  // Require the user to type RESET before the button enables, since this
+  // permanently deletes every saved password.
+  forgotPasswordBtn.addEventListener("click", () => {
+    vaultLockedSection.hidden = true;
+    vaultResetSection.hidden = false;
+    vaultResetInput.value = "";
+    vaultResetConfirmBtn.disabled = true;
+  });
+
+  vaultResetInput.addEventListener("input", () => {
+    vaultResetConfirmBtn.disabled = vaultResetInput.value.trim() !== "RESET";
+  });
+
+  vaultResetCancelBtn.addEventListener("click", async () => {
+    await refreshVaultUI();
+  });
+
+  vaultResetConfirmBtn.addEventListener("click", async () => {
+    const res = await sendMessage({ action: "VAULT_RESET" });
+    if (!res || !res.success) {
+      showToast("Could not reset vault.");
+      await refreshVaultUI();
+      return;
+    }
+    showToast("Vault reset. Saved passwords were removed — set a new master password to add new ones.");
+    await refreshVaultUI();
+    loadProfiles();
   });
 
   // Setting the `.hidden` IDL property doesn't reliably reflect to the
@@ -396,7 +433,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const addTabBtn = document.createElement("button");
       addTabBtn.type = "button";
-      addTabBtn.className = "add-tab-btn";
+      addTabBtn.className = "link-btn add-tab-btn";
       addTabBtn.textContent = "+ Add tab";
       addTabBtn.addEventListener("click", () => {
         const prefill = items[0].url || (domain !== "No domain" ? "https://" + domain : "");

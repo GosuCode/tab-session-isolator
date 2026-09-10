@@ -175,6 +175,22 @@ async function unlockVault(password) {
   return { success: true };
 }
 
+// Forgotten master password has no recovery: it's never stored, only used
+// to derive the AES key, so encrypted passwords are unrecoverable without
+// it. Reset wipes the vault and every saved password, but keeps the rest
+// of each profile (name/email/url/container) intact so setup isn't lost.
+async function resetVault() {
+  await browser.storage.local.remove(VAULT_META_KEY);
+  await clearCachedKey();
+
+  const profiles = await getProfiles();
+  for (const profile of Object.values(profiles)) {
+    delete profile.passwordEnc;
+    delete profile.password;
+  }
+  await saveProfiles(profiles);
+}
+
 // No key cached (vault locked or never unlocked this session): skip
 // silently, the page just doesn't get autofilled until the user
 // unlocks the vault from the popup.
@@ -231,6 +247,7 @@ const messageHandlers = {
   VAULT_SETUP: (message) => setupVault(message.password).then(() => ({ success: true })),
   VAULT_UNLOCK: (message) => unlockVault(message.password),
   VAULT_LOCK: () => clearCachedKey().then(() => ({ success: true })),
+  VAULT_RESET: () => resetVault().then(() => ({ success: true })),
   GET_PROFILES: () => getProfiles()
 };
 

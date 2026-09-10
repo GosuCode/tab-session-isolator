@@ -106,6 +106,14 @@
       color: var(--fg);
     }
     .secondary:hover { background: var(--soft-hover); }
+    .danger {
+      width: 100%;
+      margin-top: 3px;
+      background: var(--danger-fg);
+      color: #fff;
+    }
+    .danger:hover { background: #991b1b; }
+    .danger:disabled { opacity: 0.5; cursor: default; }
     .search { margin-bottom: 4px; }
     .domain { margin-bottom: 14px; }
     .domain-header-row {
@@ -153,19 +161,6 @@
     }
     .domain-header[aria-expanded="true"] .caret { transform: rotate(0deg); }
     .domain-header.single { cursor: default; }
-    .add-tab-btn {
-      flex: none;
-      background: none;
-      border: none;
-      padding: 0;
-      font: inherit;
-      font-size: 11px;
-      color: var(--muted);
-      text-decoration: underline;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .add-tab-btn:hover { color: var(--fg); }
     .domain-items { display: flex; flex-direction: column; }
     .domain-items.collapsed { display: none; }
     .tree-row {
@@ -266,6 +261,11 @@
       text-decoration: underline;
       cursor: pointer;
     }
+    .add-tab-btn {
+      flex: none;
+      font-size: 11px;
+      white-space: nowrap;
+    }
     .full-link { margin-top: 14px; }
     .form-panel { margin-top: 14px; }
     .toast[hidden] { display: none; }
@@ -328,6 +328,17 @@
       </label>
       <button type="submit" class="primary">Unlock</button>
     </form>
+    <button type="button" id="forgotPasswordBtn" class="link-btn" style="margin-top: 8px;">Forgot password?</button>
+  </div>
+
+  <div id="vaultResetConfirm" class="vault-panel" hidden>
+    <h2>Reset vault?</h2>
+    <p class="hint">The master password can't be recovered. Resetting permanently deletes all saved passwords. Profile names, emails, and URLs are kept, and you can set a new master password afterward. This can't be undone.</p>
+    <label>Type RESET to confirm
+      <input type="text" id="vaultResetConfirmInput" autocomplete="off">
+    </label>
+    <button type="button" id="vaultResetConfirmBtn" class="danger" disabled>Reset vault</button>
+    <button type="button" id="vaultResetCancelBtn" class="secondary">Cancel</button>
   </div>
 
   <div id="vaultUnlockedBar" class="vault-bar" hidden>
@@ -342,7 +353,7 @@
     </label>
     <div id="profileList"></div>
 
-    <button type="button" id="createForCurrentBtn" class="secondary full-link">+ Create new profile for current site</button>
+    <button type="button" id="createForCurrentBtn" class="primary full-link">+ Create new profile for current site</button>
   </div>
 
   <div id="createFormPanel" class="form-panel" hidden>
