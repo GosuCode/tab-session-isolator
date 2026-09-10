@@ -171,10 +171,72 @@
     .edit { background: none; border: 1px solid var(--line); }
     .edit:hover { background: var(--soft); }
     .empty { color: var(--muted); font-size: 12px; }
+    .vault-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 14px;
+      background: var(--soft);
+    }
+    .vault-panel h2 { margin: 0 0 4px; }
+    .vault-panel .hint {
+      color: var(--muted);
+      font-size: 11px;
+      margin: 0 0 8px;
+    }
+    .vault-panel form { gap: 7px; }
+    .vault-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+    .link-btn {
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      font-size: 11.5px;
+      color: var(--fg);
+      text-decoration: underline;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <h1>Session Isolator</h1>
+
+  <div id="vaultSetup" class="vault-panel" hidden>
+    <h2>Set a master password</h2>
+    <p class="hint">Encrypts saved passwords at rest. You'll unlock once per browser session.</p>
+    <form id="vaultSetupForm">
+      <label>Master password
+        <input type="password" id="vaultNewPassword" autocomplete="new-password">
+      </label>
+      <label>Confirm
+        <input type="password" id="vaultConfirmPassword" autocomplete="new-password">
+      </label>
+      <button type="submit" class="primary">Set master password</button>
+    </form>
+  </div>
+
+  <div id="vaultLocked" class="vault-panel" hidden>
+    <h2>Vault locked</h2>
+    <p class="hint">Enter your master password to view or save credentials.</p>
+    <form id="vaultUnlockForm">
+      <label>Master password
+        <input type="password" id="vaultUnlockPassword" autocomplete="current-password">
+      </label>
+      <button type="submit" class="primary">Unlock</button>
+    </form>
+  </div>
+
+  <div id="vaultUnlockedBar" class="vault-bar" hidden>
+    <span>Vault unlocked</span>
+    <button type="button" id="vaultLockBtn" class="link-btn">Lock</button>
+  </div>
 
   <form id="createForm">
     <label>Profile name

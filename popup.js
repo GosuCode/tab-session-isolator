@@ -11,11 +11,74 @@ document.addEventListener("DOMContentLoaded", async () => {
   const cancelBtn = document.getElementById("cancelBtn");
   const profileList = document.getElementById("profileList");
   const searchInput = document.getElementById("profileSearch");
+  const vaultSetupSection = document.getElementById("vaultSetup");
+  const vaultLockedSection = document.getElementById("vaultLocked");
+  const vaultUnlockedBar = document.getElementById("vaultUnlockedBar");
+  const vaultSetupForm = document.getElementById("vaultSetupForm");
+  const vaultUnlockForm = document.getElementById("vaultUnlockForm");
+  const vaultLockBtn = document.getElementById("vaultLockBtn");
 
   let editingId = null;
   let allProfiles = {};
   // Domains the user has manually collapsed. Multi-profile domains start expanded.
   const collapsedDomains = new Set();
+
+  function sendMessage(payload) {
+    return new Promise((resolve) => chrome.runtime.sendMessage(payload, resolve));
+  }
+
+  // Reflects vault state in the UI and gates the create/edit form on it —
+  // saving a password requires an unlocked vault key in the background.
+  async function refreshVaultUI() {
+    const status = await sendMessage({ action: "VAULT_STATUS" });
+    const exists = Boolean(status && status.exists);
+    const unlocked = Boolean(status && status.unlocked);
+    vaultSetupSection.hidden = exists;
+    vaultLockedSection.hidden = !(exists && !unlocked);
+    vaultUnlockedBar.hidden = !(exists && unlocked);
+    form.hidden = !(exists && unlocked);
+    return exists && unlocked;
+  }
+
+  vaultSetupForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const pw = document.getElementById("vaultNewPassword").value;
+    const confirmPw = document.getElementById("vaultConfirmPassword").value;
+    if (pw.length < 8) {
+      alert("Master password must be at least 8 characters.");
+      return;
+    }
+    if (pw !== confirmPw) {
+      alert("Passwords do not match.");
+      return;
+    }
+    const res = await sendMessage({ action: "VAULT_SETUP", password: pw });
+    if (!res || !res.success) {
+      alert("Could not set master password.");
+      return;
+    }
+    vaultSetupForm.reset();
+    await refreshVaultUI();
+    loadProfiles();
+  });
+
+  vaultUnlockForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const pw = document.getElementById("vaultUnlockPassword").value;
+    const res = await sendMessage({ action: "VAULT_UNLOCK", password: pw });
+    if (!res || !res.success) {
+      alert(res && res.error === "wrong-password" ? "Incorrect master password." : "Could not unlock vault.");
+      return;
+    }
+    vaultUnlockForm.reset();
+    await refreshVaultUI();
+  });
+
+  vaultLockBtn.addEventListener("click", async () => {
+    await sendMessage({ action: "VAULT_LOCK" });
+    setEditMode(null);
+    await refreshVaultUI();
+  });
 
   function resetPasswordVisibility() {
     passwordInput.type = "password";
@@ -25,16 +88,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     togglePassword.setAttribute("aria-label", "Show password");
   }
 
-  function setEditMode(profile) {
+  async function setEditMode(profile) {
     editingId = profile ? profile.id : null;
     if (profile) {
       nameInput.value = profile.name || "";
       emailInput.value = profile.email || "";
-      passwordInput.value = profile.password || "";
+      passwordInput.value = "";
       urlInput.value = profile.url || "";
       createBtn.textContent = "Save changes";
       cancelBtn.hidden = false;
       nameInput.focus();
+      if (profile.passwordEnc) {
+        const res = await sendMessage({ action: "GET_PROFILE_PASSWORD", profileId: profile.id });
+        if (res && res.success) {
+          passwordInput.value = res.password;
+        } else {
+          alert("Vault is locked. Unlock it to edit the saved password.");
+        }
+      }
     } else {
       form.reset();
       createBtn.textContent = "Create profile";
@@ -241,6 +312,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         "Firefox containers are disabled. To use this extension, set " +
           "privacy.userContext.enabled to true in about:config, then restart Firefox."
       );
+    } else if (response.error === "vault-locked") {
+      alert("Vault is locked. Unlock it above before saving credentials.");
+    } else if (response.error === "vault-not-setup") {
+      alert("Set a master password above before saving credentials.");
     } else {
       alert("Could not complete the request: " + response.error);
     }
@@ -278,5 +353,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  refreshVaultUI();
   loadProfiles();
 });
