@@ -49,6 +49,7 @@
       font-size: 11px;
       color: var(--muted);
     }
+    label[hidden] { display: none; }
     input {
       width: 100%;
       padding: 7px 9px;
@@ -251,6 +252,7 @@
       font-size: 11.5px;
       color: var(--muted);
     }
+    .vault-bar-actions { display: flex; align-items: center; gap: 10px; }
     .link-btn {
       background: none;
       border: none;
@@ -343,7 +345,26 @@
 
   <div id="vaultUnlockedBar" class="vault-bar" hidden>
     <span>Vault unlocked</span>
-    <button type="button" id="vaultLockBtn" class="link-btn">Lock</button>
+    <span class="vault-bar-actions">
+      <button type="button" id="exportBtn" class="link-btn">Export</button>
+      <button type="button" id="importBtn" class="link-btn">Import</button>
+      <button type="button" id="vaultLockBtn" class="link-btn">Lock</button>
+    </span>
+  </div>
+
+  <div id="vaultActionConfirm" class="vault-panel" hidden>
+    <h2 id="vaultActionTitle">Master password</h2>
+    <p class="hint" id="vaultActionHint"></p>
+    <form id="vaultActionForm">
+      <label id="importFileLabel" hidden>CSV file
+        <input type="file" id="importFileInput" accept=".csv,text/csv">
+      </label>
+      <label>Master password
+        <input type="password" id="vaultActionPassword" autocomplete="current-password">
+      </label>
+      <button type="submit" class="primary" id="vaultActionSubmitBtn">Continue</button>
+      <button type="button" class="secondary" id="vaultActionCancelBtn">Cancel</button>
+    </form>
   </div>
 
   <div id="profilesSection">

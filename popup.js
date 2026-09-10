@@ -26,6 +26,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   const vaultResetInput = document.getElementById("vaultResetConfirmInput");
   const vaultResetConfirmBtn = document.getElementById("vaultResetConfirmBtn");
   const vaultResetCancelBtn = document.getElementById("vaultResetCancelBtn");
+  const exportBtn = document.getElementById("exportBtn");
+  const importBtn = document.getElementById("importBtn");
+  const vaultActionSection = document.getElementById("vaultActionConfirm");
+  const vaultActionTitle = document.getElementById("vaultActionTitle");
+  const vaultActionHint = document.getElementById("vaultActionHint");
+  const vaultActionForm = document.getElementById("vaultActionForm");
+  const vaultActionPassword = document.getElementById("vaultActionPassword");
+  const vaultActionSubmitBtn = document.getElementById("vaultActionSubmitBtn");
+  const vaultActionCancelBtn = document.getElementById("vaultActionCancelBtn");
+  const importFileLabel = document.getElementById("importFileLabel");
+  const importFileInput = document.getElementById("importFileInput");
   const toast = document.getElementById("toast");
   const toastMsg = document.getElementById("toastMsg");
   const toastClose = document.getElementById("toastClose");
@@ -70,6 +81,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     vaultSetupSection.hidden = exists;
     vaultLockedSection.hidden = !locked;
     vaultResetSection.hidden = true;
+    vaultActionSection.hidden = true;
     vaultUnlockedBar.hidden = !(exists && unlocked);
     // While the vault is locked or not yet set up, its panel is the only
     // thing shown — no browsing/creating profiles until it's unlocked.
@@ -149,6 +161,84 @@ document.addEventListener("DOMContentLoaded", async () => {
     showToast("Vault reset. Saved passwords were removed — set a new master password to add new ones.");
     await refreshVaultUI();
     loadProfiles();
+  });
+
+  // Export/import always re-derive the key from a freshly typed master
+  // password (verifyMasterPassword in the background script) rather than
+  // reusing the cached session key — asked every time, even mid-session.
+  let vaultActionMode = null; // "export" | "import"
+
+  function openVaultAction(mode) {
+    vaultActionMode = mode;
+    vaultActionTitle.textContent = mode === "export" ? "Export profiles" : "Import profiles";
+    vaultActionHint.textContent =
+      mode === "export"
+        ? "Re-enter your master password to decrypt and export saved passwords as a CSV file."
+        : "Choose a CSV file (name, url, username, password) and re-enter your master password to import.";
+    // Import always shows the file picker — export never shows it at all.
+    importFileLabel.hidden = mode !== "import";
+    importFileInput.value = "";
+    vaultActionPassword.value = "";
+    vaultActionSubmitBtn.textContent = mode === "export" ? "Export" : "Import";
+    vaultUnlockedBar.hidden = true;
+    profilesSection.hidden = true;
+    formPanel.hidden = true;
+    vaultActionSection.hidden = false;
+  }
+
+  exportBtn.addEventListener("click", () => openVaultAction("export"));
+  importBtn.addEventListener("click", () => openVaultAction("import"));
+
+  vaultActionCancelBtn.addEventListener("click", async () => {
+    await refreshVaultUI();
+  });
+
+  function downloadCsv(csv) {
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "tab-session-isolator-profiles.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  vaultActionForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const password = vaultActionPassword.value;
+    if (!password) {
+      showToast("Enter your master password.");
+      return;
+    }
+
+    if (vaultActionMode === "export") {
+      const res = await sendMessage({ action: "VAULT_EXPORT", password });
+      if (!res || !res.success) {
+        showToast(res && res.error === "wrong-password" ? "Incorrect master password." : "Could not export profiles.");
+        return;
+      }
+      downloadCsv(res.csv);
+      showToast(`Exported ${res.count} profile(s).`);
+    } else {
+      const file = importFileInput.files[0];
+      if (!file) {
+        showToast("Choose a CSV file to import.");
+        return;
+      }
+      const csvText = await file.text();
+      const res = await sendMessage({ action: "VAULT_IMPORT", password, csvText });
+      if (!res || !res.success) {
+        showToast(res && res.error === "wrong-password" ? "Incorrect master password." : "Could not import profiles.");
+        return;
+      }
+      const failedPart = res.errors && res.errors.length ? `, ${res.errors.length} failed` : "";
+      showToast(`Imported ${res.imported}/${res.total} profile(s)${failedPart}.`);
+      loadProfiles();
+    }
+
+    await refreshVaultUI();
   });
 
   // Setting the `.hidden` IDL property doesn't reliably reflect to the

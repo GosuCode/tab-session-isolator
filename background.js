@@ -161,7 +161,11 @@ async function setupVault(password) {
   if (changed) await saveProfiles(profiles);
 }
 
-async function unlockVault(password) {
+// Derives the key from a candidate password and checks it against the vault
+// without touching the cached session key. Export/import call this directly
+// (instead of getCachedKey) so they always demand the password fresh, even
+// mid-session with the vault already unlocked.
+async function verifyMasterPassword(password) {
   const meta = await getVaultMeta();
   if (!meta) return { success: false, error: "vault-not-setup" };
   const key = await deriveKeyFromPassword(password, meta.salt);
@@ -171,7 +175,13 @@ async function unlockVault(password) {
   } catch (e) {
     return { success: false, error: "wrong-password" };
   }
-  await cacheKey(key);
+  return { success: true, key };
+}
+
+async function unlockVault(password) {
+  const result = await verifyMasterPassword(password);
+  if (!result.success) return result;
+  await cacheKey(result.key);
   return { success: true };
 }
 
@@ -248,6 +258,8 @@ const messageHandlers = {
   VAULT_UNLOCK: (message) => unlockVault(message.password),
   VAULT_LOCK: () => clearCachedKey().then(() => ({ success: true })),
   VAULT_RESET: () => resetVault().then(() => ({ success: true })),
+  VAULT_EXPORT: (message) => exportProfiles(message.password),
+  VAULT_IMPORT: (message) => importProfiles(message.password, message.csvText),
   GET_PROFILES: () => getProfiles()
 };
 
@@ -306,23 +318,21 @@ async function createContainer(name, color) {
   return identity.cookieStoreId;
 }
 
-// Create new profile and open its isolated tab
-async function handleCreateProfile(name, email, password, url) {
-  if (containersDisabled()) return { success: false, error: "containers-disabled" };
+let profileIdCounter = 0;
+function nextProfileId() {
+  profileIdCounter += 1;
+  return `prof_${Date.now()}_${profileIdCounter}`;
+}
 
-  const vaultMeta = await getVaultMeta();
-  if (!vaultMeta) return { success: false, error: "vault-not-setup" };
-  const key = await getCachedKey();
-  if (!key) return { success: false, error: "vault-locked" };
-
+// Builds a stored profile record (container + encrypted password), shared
+// by single-profile creation and bulk import. Does not open a tab.
+async function buildProfileRecord({ name, email, password, url, key }) {
   const baseUrl = originOf(url) || url;
-  const profileId = "prof_" + Date.now();
   const index = Math.floor(Math.random() * CONTAINER_COLORS.length);
-
   const cookieStoreId = await createContainer(name, CONTAINER_COLORS[index]);
 
-  const profile = {
-    id: profileId,
+  return {
+    id: nextProfileId(),
     name,
     email: email || "",
     passwordEnc: await encryptPasswordIfProvided(key, password),
@@ -332,16 +342,189 @@ async function handleCreateProfile(name, email, password, url) {
     containerColor: CONTAINER_COLORS[index],
     cookieStoreId
   };
+}
+
+// Create new profile and open its isolated tab
+async function handleCreateProfile(name, email, password, url) {
+  if (containersDisabled()) return { success: false, error: "containers-disabled" };
+
+  const vaultMeta = await getVaultMeta();
+  if (!vaultMeta) return { success: false, error: "vault-not-setup" };
+  const key = await getCachedKey();
+  if (!key) return { success: false, error: "vault-locked" };
+
+  const profile = await buildProfileRecord({ name, email, password, url, key });
 
   const profiles = await getProfiles();
-  profiles[profileId] = profile;
+  profiles[profile.id] = profile;
   await saveProfiles(profiles);
 
-  const tab = await browser.tabs.create({ url: baseUrl, cookieStoreId });
-  await setTabProfile(tab.id, profileId);
-  updateTabBadge(tab.id, name, profile.color);
+  const tab = await browser.tabs.create({ url: profile.url, cookieStoreId: profile.cookieStoreId });
+  await setTabProfile(tab.id, profile.id);
+  updateTabBadge(tab.id, profile.name, profile.color);
 
-  return { success: true, profileId, tabId: tab.id };
+  return { success: true, profileId: profile.id, tabId: tab.id };
+}
+
+// --- CSV import / export ----------------------------------------------------
+// Uses the same columns Chrome/Firefox use for their own password exports
+// (name,url,username,password) so a browser export can be dropped in as-is.
+
+const CSV_COLUMNS = ["name", "url", "username", "password"];
+const CSV_HEADER_ALIASES = {
+  name: ["name", "title"],
+  url: ["url", "link", "hostname", "origin"],
+  username: ["username", "email", "login"],
+  password: ["password", "pass"]
+};
+
+function csvEscape(value) {
+  const s = String(value == null ? "" : value);
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function toCsv(rows) {
+  const lines = [CSV_COLUMNS.join(",")];
+  for (const row of rows) {
+    lines.push(CSV_COLUMNS.map((col) => csvEscape(row[col])).join(","));
+  }
+  return lines.join("\r\n");
+}
+
+// Minimal RFC4180-style parser: handles quoted fields with embedded commas,
+// newlines, and escaped ("") quotes.
+function parseCsvRows(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let inQuotes = false;
+
+  const pushField = () => {
+    row.push(field);
+    field = "";
+  };
+  const pushRow = () => {
+    pushField();
+    rows.push(row);
+    row = [];
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ",") {
+      pushField();
+    } else if (c === "\n") {
+      pushRow();
+    } else if (c !== "\r") {
+      field += c;
+    }
+  }
+  if (field !== "" || row.length > 0) pushRow();
+
+  return rows.filter((r) => !(r.length === 1 && r[0] === ""));
+}
+
+function matchHeaderColumn(header) {
+  const h = header.trim().toLowerCase();
+  for (const [column, aliases] of Object.entries(CSV_HEADER_ALIASES)) {
+    if (aliases.includes(h)) return column;
+  }
+  return null;
+}
+
+function parseCsv(text) {
+  const rawRows = parseCsvRows(text);
+  if (rawRows.length === 0) return [];
+
+  const headerRow = rawRows[0].map(matchHeaderColumn);
+  const hasHeader = headerRow.some((col) => col !== null);
+  const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
+  const columns = hasHeader ? headerRow : CSV_COLUMNS;
+
+  return dataRows
+    .filter((r) => r.some((v) => v && v.trim() !== ""))
+    .map((r) => {
+      const record = {};
+      columns.forEach((col, i) => {
+        if (col) record[col] = (r[i] || "").trim();
+      });
+      return record;
+    });
+}
+
+// Re-derives the key from the given password (never the cached session key)
+// so export always demands the master password fresh.
+async function exportProfiles(password) {
+  const verify = await verifyMasterPassword(password);
+  if (!verify.success) return verify;
+
+  const profiles = await getProfiles();
+  const rows = [];
+  for (const profile of Object.values(profiles)) {
+    let password = "";
+    if (profile.passwordEnc) {
+      try {
+        password = await decryptString(verify.key, profile.passwordEnc);
+      } catch (e) {
+        password = "";
+      }
+    }
+    rows.push({
+      name: profile.name || "",
+      url: profile.url || (profile.domain ? `https://${profile.domain}` : ""),
+      username: profile.email || "",
+      password
+    });
+  }
+
+  return { success: true, csv: toCsv(rows), count: rows.length };
+}
+
+// Re-derives the key from the given password (never the cached session key)
+// so import always demands the master password fresh. Creates a container
+// per row but does not open tabs.
+async function importProfiles(password, csvText) {
+  if (containersDisabled()) return { success: false, error: "containers-disabled" };
+
+  const verify = await verifyMasterPassword(password);
+  if (!verify.success) return verify;
+
+  const rows = parseCsv(csvText);
+  const profiles = await getProfiles();
+  const errors = [];
+  let imported = 0;
+
+  for (const row of rows) {
+    try {
+      const profile = await buildProfileRecord({
+        name: row.name || row.url || "Imported profile",
+        email: row.username,
+        password: row.password,
+        url: row.url,
+        key: verify.key
+      });
+      profiles[profile.id] = profile;
+      imported++;
+    } catch (e) {
+      errors.push({ row: row.name || row.url || "(unnamed)", error: errorCode(e) });
+    }
+  }
+
+  await saveProfiles(profiles);
+  return { success: true, imported, total: rows.length, errors };
 }
 
 // Launch existing profile in a new isolated tab
