@@ -13,6 +13,9 @@
       --accent-hover: #3f3f46;
       --soft: #f4f4f5;
       --soft-hover: #e4e4e7;
+      --danger-bg: #fef2f2;
+      --danger-border: #fecaca;
+      --danger-fg: #b91c1c;
     }
     * { box-sizing: border-box; }
     body {
@@ -203,10 +206,41 @@
       text-decoration: underline;
       cursor: pointer;
     }
+    .toast {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      background: var(--danger-bg);
+      border: 1px solid var(--danger-border);
+      color: var(--danger-fg);
+      border-radius: 7px;
+      padding: 8px 10px;
+      font-size: 11.5px;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+    .toast-msg { flex: 1; word-break: break-word; }
+    .toast-close {
+      flex: none;
+      background: none;
+      border: none;
+      padding: 0;
+      color: inherit;
+      opacity: 0.7;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+    }
+    .toast-close:hover { opacity: 1; }
   </style>
 </head>
 <body>
   <h1>Session Isolator</h1>
+
+  <div id="toast" class="toast" role="alert" hidden>
+    <span class="toast-msg" id="toastMsg"></span>
+    <button type="button" class="toast-close" id="toastClose" aria-label="Dismiss">×</button>
+  </div>
 
   <div id="vaultSetup" class="vault-panel" hidden>
     <h2>Set a master password</h2>

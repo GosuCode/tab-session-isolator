@@ -17,6 +17,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   const vaultSetupForm = document.getElementById("vaultSetupForm");
   const vaultUnlockForm = document.getElementById("vaultUnlockForm");
   const vaultLockBtn = document.getElementById("vaultLockBtn");
+  const toast = document.getElementById("toast");
+  const toastMsg = document.getElementById("toastMsg");
+  const toastClose = document.getElementById("toastClose");
+
+  let toastTimer = null;
+  function showToast(message) {
+    toastMsg.textContent = message;
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, 6000);
+  }
+  toastClose.addEventListener("click", () => {
+    clearTimeout(toastTimer);
+    toast.hidden = true;
+  });
 
   let editingId = null;
   let allProfiles = {};
@@ -45,16 +60,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     const pw = document.getElementById("vaultNewPassword").value;
     const confirmPw = document.getElementById("vaultConfirmPassword").value;
     if (pw.length < 8) {
-      alert("Master password must be at least 8 characters.");
+      showToast("Master password must be at least 8 characters.");
       return;
     }
     if (pw !== confirmPw) {
-      alert("Passwords do not match.");
+      showToast("Passwords do not match.");
       return;
     }
     const res = await sendMessage({ action: "VAULT_SETUP", password: pw });
     if (!res || !res.success) {
-      alert("Could not set master password.");
+      showToast("Could not set master password.");
       return;
     }
     vaultSetupForm.reset();
@@ -67,7 +82,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const pw = document.getElementById("vaultUnlockPassword").value;
     const res = await sendMessage({ action: "VAULT_UNLOCK", password: pw });
     if (!res || !res.success) {
-      alert(res && res.error === "wrong-password" ? "Incorrect master password." : "Could not unlock vault.");
+      showToast(res && res.error === "wrong-password" ? "Incorrect master password." : "Could not unlock vault.");
       return;
     }
     vaultUnlockForm.reset();
@@ -103,7 +118,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (res && res.success) {
           passwordInput.value = res.password;
         } else {
-          alert("Vault is locked. Unlock it to edit the saved password.");
+          showToast("Vault is locked. Unlock it to edit the saved password.");
         }
       }
     } else {
@@ -308,16 +323,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   function reportError(response) {
     if (!response || response.success !== false) return;
     if (response.error === "containers-disabled") {
-      alert(
-        "Firefox containers are disabled. To use this extension, set " +
-          "privacy.userContext.enabled to true in about:config, then restart Firefox."
+      showToast(
+        "Firefox containers are disabled. Set privacy.userContext.enabled to true " +
+          "in about:config, then restart Firefox."
       );
     } else if (response.error === "vault-locked") {
-      alert("Vault is locked. Unlock it above before saving credentials.");
+      showToast("Vault is locked. Unlock it above before saving credentials.");
     } else if (response.error === "vault-not-setup") {
-      alert("Set a master password above before saving credentials.");
+      showToast("Set a master password above before saving credentials.");
     } else {
-      alert("Could not complete the request: " + response.error);
+      showToast("Could not complete the request: " + response.error);
     }
   }
 
@@ -330,11 +345,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     const url = normalizeBaseUrl(urlInput.value);
 
     if (!name) {
-      alert("Enter a profile name.");
+      showToast("Enter a profile name.");
       return;
     }
     if (!url) {
-      alert("Enter a valid http(s) URL.");
+      showToast("Enter a valid http(s) URL.");
       return;
     }
 
