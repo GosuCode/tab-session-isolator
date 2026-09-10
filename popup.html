@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #18181b;
+      --muted: #71717a;
+      --line: #e4e4e7;
+      --field: #ffffff;
+      --accent: #18181b;
+      --accent-hover: #3f3f46;
+      --soft: #f4f4f5;
+      --soft-hover: #e4e4e7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 16px;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--fg);
+      background: var(--bg);
+    }
+    h1 {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      margin: 0 0 14px;
+    }
+    h2 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 18px 0 8px;
+    }
+    form { display: grid; gap: 9px; }
+    label {
+      display: grid;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    input {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      font: inherit;
+      font-size: 12.5px;
+      color: var(--fg);
+      background: var(--field);
+      outline: none;
+      transition: border-color 0.12s ease;
+    }
+    input:focus { border-color: var(--accent); }
+    .pw { position: relative; display: block; }
+    .pw input { padding-right: 34px; }
+    .eye {
+      position: absolute;
+      top: 50%;
+      right: 4px;
+      transform: translateY(-50%);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      background: none;
+      border: none;
+      border-radius: 6px;
+      color: var(--muted);
+      cursor: pointer;
+      line-height: 0;
+    }
+    .eye:hover { color: var(--fg); }
+    .eye svg { width: 16px; height: 16px; display: block; }
+    .eye svg[hidden] { display: none; }
+    button {
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 500;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      padding: 8px 10px;
+    }
+    .primary {
+      width: 100%;
+      margin-top: 3px;
+      background: var(--accent);
+      color: #fff;
+    }
+    .primary:hover { background: var(--accent-hover); }
+    .primary:disabled { opacity: 0.5; cursor: default; }
+    .secondary {
+      width: 100%;
+      background: var(--soft);
+      color: var(--fg);
+    }
+    .secondary:hover { background: var(--soft-hover); }
+    .search { margin-bottom: 4px; }
+    .domain { margin-bottom: 12px; }
+    .domain-header {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      width: 100%;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 5px;
+      padding: 2px 0;
+      background: none;
+      border: none;
+      text-align: left;
+      cursor: pointer;
+      word-break: break-all;
+    }
+    .domain-header:hover { color: var(--fg); }
+    .domain-header .domain-name { flex: 1; word-break: break-all; }
+    .domain-header .count {
+      flex: none;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .caret {
+      flex: none;
+      width: 10px;
+      height: 10px;
+      transition: transform 0.12s ease;
+      transform: rotate(-90deg);
+    }
+    .domain-header[aria-expanded="true"] .caret { transform: rotate(0deg); }
+    .domain-header.single {
+      cursor: default;
+    }
+    .domain-items.collapsed { display: none; }
+    .profile {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+    }
+    .profile-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .profile-name { font-weight: 600; }
+    .profile-meta {
+      color: var(--muted);
+      font-size: 11.5px;
+      margin-top: 2px;
+      word-break: break-all;
+    }
+    .actions { display: flex; gap: 6px; flex: none; }
+    .launch, .edit {
+      background: var(--soft);
+      color: var(--fg);
+      padding: 5px 10px;
+      font-size: 11.5px;
+    }
+    .launch:hover, .edit:hover { background: var(--soft-hover); }
+    .edit { background: none; border: 1px solid var(--line); }
+    .edit:hover { background: var(--soft); }
+    .empty { color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Session Isolator</h1>
+
+  <form id="createForm">
+    <label>Profile name
+      <input type="text" id="profileName" placeholder="Account 1" autocomplete="off">
+    </label>
+    <label>Email
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="off">
+    </label>
+    <label>Password
+      <span class="pw">
+        <input type="password" id="password" placeholder="Password" autocomplete="new-password">
+        <button type="button" id="togglePassword" class="eye" aria-label="Show password" aria-pressed="false">
+          <svg id="eyeShow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          <svg id="eyeHide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden>
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+            <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path>
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+          </svg>
+        </button>
+      </span>
+    </label>
+    <label>URL
+      <input type="url" id="url" placeholder="https://example.com" autocomplete="off">
+    </label>
+    <button type="submit" class="primary" id="createBtn">Create profile</button>
+    <button type="button" class="secondary" id="cancelBtn" hidden>Cancel edit</button>
+  </form>
+
+  <h2>Saved profiles</h2>
+  <label class="search">Search
+    <input type="search" id="profileSearch" placeholder="Name, email, or domain" autocomplete="off">
+  </label>
+  <div id="profileList"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

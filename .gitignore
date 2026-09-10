@@ -1,0 +1,22 @@
+# Build/packaging output
+*.xpi
+*.zip
+web-ext-artifacts/
+
+# Dependencies (if you add tooling later, e.g. web-ext via npm)
+node_modules/
+
+# AMO / web-ext signing config (can contain API creds)
+.web-extension-id
+web-ext-config.js
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Env/secrets
+.env
+.env.*

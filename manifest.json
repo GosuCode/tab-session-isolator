@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Session Isolator",
+  "version": "1.1.0",
+  "description": "Run multiple accounts in separate Firefox container tabs, each with isolated cookies and storage.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tab-session-isolator@local",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": [
+    "contextualIdentities",
+    "cookies",
+    "storage",
+    "tabs"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
