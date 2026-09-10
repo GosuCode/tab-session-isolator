@@ -251,6 +251,7 @@ const messageHandlers = {
   LAUNCH_PROFILE: (message) => handleLaunchProfile(message.profileId),
   EDIT_PROFILE: (message) =>
     handleEditProfile(message.profileId, message.name, message.email, message.password, message.url),
+  DELETE_PROFILE: (message) => handleDeleteProfile(message.profileId),
   GET_CREDENTIALS: (message, sender) => handleGetCredentials(sender.tab && sender.tab.id),
   GET_PROFILE_PASSWORD: (message) => handleGetProfilePassword(message.profileId),
   VAULT_STATUS: () => handleVaultStatus(),
@@ -587,6 +588,23 @@ async function handleEditProfile(profileId, name, email, password, url) {
       tabs.forEach((t) => updateTabBadge(t.id, profile.name, profile.color));
     });
   }
+
+  return { success: true, profileId };
+}
+
+// Delete a profile: drop its container (closes any tabs using it) and
+// remove it from storage.
+async function handleDeleteProfile(profileId) {
+  const profiles = await getProfiles();
+  const profile = profiles[profileId];
+  if (!profile) return { success: false, error: "not-found" };
+
+  if (profile.cookieStoreId && !containersDisabled()) {
+    await trySilently(() => browser.contextualIdentities.remove(profile.cookieStoreId));
+  }
+
+  delete profiles[profileId];
+  await saveProfiles(profiles);
 
   return { success: true, profileId };
 }

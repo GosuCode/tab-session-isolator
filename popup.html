@@ -197,6 +197,7 @@
       align-items: center;
       gap: 7px;
       min-width: 0;
+      flex: 1 1 auto;
     }
     .profile-dot {
       flex: none;
@@ -204,24 +205,44 @@
       height: 8px;
       border-radius: 50%;
     }
-    .profile-text { min-width: 0; }
-    .profile-name { font-weight: 600; }
+    .profile-text { min-width: 0; overflow: hidden; }
+    .profile-name {
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .profile-meta {
       color: var(--muted);
       font-size: 11.5px;
       margin-top: 1px;
-      word-break: break-all;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    .actions { display: flex; gap: 6px; flex: none; }
-    .launch, .edit {
+    .actions { display: flex; align-items: center; gap: 4px; flex: none; }
+    .launch {
       background: var(--soft);
       color: var(--fg);
       padding: 5px 10px;
       font-size: 11.5px;
     }
-    .launch:hover, .edit:hover { background: var(--soft-hover); }
-    .edit { background: none; border: 1px solid var(--line); }
-    .edit:hover { background: var(--soft); }
+    .launch:hover { background: var(--soft-hover); }
+    .icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      background: none;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--muted);
+    }
+    .icon-btn.edit:hover { background: var(--soft); color: var(--fg); }
+    .icon-btn.delete { border-color: var(--danger-border); color: var(--danger-fg); }
+    .icon-btn.delete:hover { background: var(--danger-bg); }
     .launch-all-btn {
       background: var(--soft);
       color: var(--fg);
