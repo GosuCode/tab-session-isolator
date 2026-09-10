@@ -37,6 +37,25 @@ async function removeTabProfile(tabId) {
 const containersDisabled = () =>
   !browser.contextualIdentities || !browser.cookies;
 
+// --- Profile storage -------------------------------------------------------
+
+async function getProfiles() {
+  const res = await browser.storage.local.get("profiles");
+  return res.profiles || {};
+}
+
+async function saveProfiles(profiles) {
+  await browser.storage.local.set({ profiles });
+}
+
+async function trySilently(fn) {
+  try {
+    await fn();
+  } catch (e) {
+    // Ignore: caller treats this as best-effort.
+  }
+}
+
 // --- Password vault -------------------------------------------------------
 // Saved passwords are encrypted at rest with a key derived from a
 // user-chosen master password (PBKDF2 -> AES-GCM). The derived key is
@@ -89,6 +108,10 @@ async function decryptString(key, { iv, ct }) {
   return new TextDecoder().decode(plainBuf);
 }
 
+async function encryptPasswordIfProvided(key, password) {
+  return password ? await encryptString(key, password) : null;
+}
+
 async function getVaultMeta() {
   const res = await browser.storage.local.get(VAULT_META_KEY);
   return res[VAULT_META_KEY] || null;
@@ -126,7 +149,7 @@ async function setupVault(password) {
   await browser.storage.local.set({ [VAULT_META_KEY]: { salt: saltB64, check } });
   await cacheKey(key);
 
-  const { profiles = {} } = await browser.storage.local.get("profiles");
+  const profiles = await getProfiles();
   let changed = false;
   for (const profile of Object.values(profiles)) {
     if (typeof profile.password === "string" && profile.password) {
@@ -135,7 +158,7 @@ async function setupVault(password) {
       changed = true;
     }
   }
-  if (changed) await browser.storage.local.set({ profiles });
+  if (changed) await saveProfiles(profiles);
 }
 
 async function unlockVault(password) {
@@ -152,117 +175,73 @@ async function unlockVault(password) {
   return { success: true };
 }
 
+// No key cached (vault locked or never unlocked this session): skip
+// silently, the page just doesn't get autofilled until the user
+// unlocks the vault from the popup.
+async function handleGetCredentials(tabId) {
+  const profileId = await getTabProfile(tabId);
+  if (!profileId) return null;
+
+  const profile = (await getProfiles())[profileId];
+  if (!profile) return null;
+
+  const key = await getCachedKey();
+  let password = "";
+  if (key && profile.passwordEnc) {
+    try {
+      password = await decryptString(key, profile.passwordEnc);
+    } catch (e) {
+      password = "";
+    }
+  }
+  return { email: profile.email || "", password, domain: profile.domain || "" };
+}
+
+async function handleGetProfilePassword(profileId) {
+  const profile = (await getProfiles())[profileId];
+  if (!profile) return { success: false, error: "not-found" };
+
+  const key = await getCachedKey();
+  if (!key) return { success: false, error: "vault-locked" };
+
+  try {
+    const password = profile.passwordEnc ? await decryptString(key, profile.passwordEnc) : "";
+    return { success: true, password };
+  } catch (e) {
+    return { success: false, error: "decrypt-failed" };
+  }
+}
+
+async function handleVaultStatus() {
+  const [meta, key] = await Promise.all([getVaultMeta(), getCachedKey()]);
+  return { exists: !!meta, unlocked: !!key };
+}
+
+// Each handler takes (message, sender) and resolves to the response payload.
+// The listener below owns all response/error plumbing so handlers stay pure.
+const messageHandlers = {
+  CREATE_PROFILE: (message) =>
+    handleCreateProfile(message.profileName, message.email, message.password, message.url),
+  LAUNCH_PROFILE: (message) => handleLaunchProfile(message.profileId),
+  EDIT_PROFILE: (message) =>
+    handleEditProfile(message.profileId, message.name, message.email, message.password, message.url),
+  GET_CREDENTIALS: (message, sender) => handleGetCredentials(sender.tab && sender.tab.id),
+  GET_PROFILE_PASSWORD: (message) => handleGetProfilePassword(message.profileId),
+  VAULT_STATUS: () => handleVaultStatus(),
+  VAULT_SETUP: (message) => setupVault(message.password).then(() => ({ success: true })),
+  VAULT_UNLOCK: (message) => unlockVault(message.password),
+  VAULT_LOCK: () => clearCachedKey().then(() => ({ success: true })),
+  GET_PROFILES: () => getProfiles()
+};
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === "CREATE_PROFILE") {
-    handleCreateProfile(message.profileName, message.email, message.password, message.url)
-      .then(sendResponse)
-      .catch((e) => sendResponse({ success: false, error: errorCode(e) }));
-    return true; // Async response
-  }
+  const handler = messageHandlers[message.action];
+  if (!handler) return false;
 
-  if (message.action === "LAUNCH_PROFILE") {
-    handleLaunchProfile(message.profileId)
-      .then(sendResponse)
-      .catch((e) => sendResponse({ success: false, error: errorCode(e) }));
-    return true;
-  }
-
-  if (message.action === "EDIT_PROFILE") {
-    handleEditProfile(message.profileId, message.name, message.email, message.password, message.url)
-      .then(sendResponse)
-      .catch((e) => sendResponse({ success: false, error: errorCode(e) }));
-    return true;
-  }
-
-  if (message.action === "GET_CREDENTIALS") {
-    const tabId = sender.tab && sender.tab.id;
-    getTabProfile(tabId).then(async (profileId) => {
-      if (!profileId) {
-        sendResponse(null);
-        return;
-      }
-      const res = await browser.storage.local.get("profiles");
-      const profile = (res.profiles || {})[profileId];
-      if (!profile) {
-        sendResponse(null);
-        return;
-      }
-      // No key cached (vault locked or never unlocked this session): skip
-      // silently, the page just doesn't get autofilled until the user
-      // unlocks the vault from the popup.
-      const key = await getCachedKey();
-      let password = "";
-      if (key && profile.passwordEnc) {
-        try {
-          password = await decryptString(key, profile.passwordEnc);
-        } catch (e) {
-          password = "";
-        }
-      }
-      sendResponse({
-        email: profile.email || "",
-        password,
-        domain: profile.domain || ""
-      });
-    });
-    return true;
-  }
-
-  if (message.action === "GET_PROFILE_PASSWORD") {
-    (async () => {
-      const { profiles = {} } = await browser.storage.local.get("profiles");
-      const profile = profiles[message.profileId];
-      if (!profile) {
-        sendResponse({ success: false, error: "not-found" });
-        return;
-      }
-      const key = await getCachedKey();
-      if (!key) {
-        sendResponse({ success: false, error: "vault-locked" });
-        return;
-      }
-      try {
-        const password = profile.passwordEnc ? await decryptString(key, profile.passwordEnc) : "";
-        sendResponse({ success: true, password });
-      } catch (e) {
-        sendResponse({ success: false, error: "decrypt-failed" });
-      }
-    })();
-    return true;
-  }
-
-  if (message.action === "VAULT_STATUS") {
-    Promise.all([getVaultMeta(), getCachedKey()]).then(([meta, key]) => {
-      sendResponse({ exists: !!meta, unlocked: !!key });
-    });
-    return true;
-  }
-
-  if (message.action === "VAULT_SETUP") {
-    setupVault(message.password)
-      .then(() => sendResponse({ success: true }))
-      .catch((e) => sendResponse({ success: false, error: errorCode(e) }));
-    return true;
-  }
-
-  if (message.action === "VAULT_UNLOCK") {
-    unlockVault(message.password)
-      .then(sendResponse)
-      .catch((e) => sendResponse({ success: false, error: errorCode(e) }));
-    return true;
-  }
-
-  if (message.action === "VAULT_LOCK") {
-    clearCachedKey().then(() => sendResponse({ success: true }));
-    return true;
-  }
-
-  if (message.action === "GET_PROFILES") {
-    browser.storage.local.get("profiles").then((res) => {
-      sendResponse(res.profiles || {});
-    });
-    return true;
-  }
+  Promise.resolve(handler(message, sender))
+    .then(sendResponse)
+    .catch((e) => sendResponse({ success: false, error: errorCode(e) }));
+  return true; // Async response
 });
 
 function errorCode(e) {
@@ -329,7 +308,7 @@ async function handleCreateProfile(name, email, password, url) {
     id: profileId,
     name,
     email: email || "",
-    passwordEnc: password ? await encryptString(key, password) : null,
+    passwordEnc: await encryptPasswordIfProvided(key, password),
     url: baseUrl,
     domain: hostnameOf(baseUrl),
     color: BADGE_COLORS[index],
@@ -337,9 +316,9 @@ async function handleCreateProfile(name, email, password, url) {
     cookieStoreId
   };
 
-  const { profiles = {} } = await browser.storage.local.get("profiles");
+  const profiles = await getProfiles();
   profiles[profileId] = profile;
-  await browser.storage.local.set({ profiles });
+  await saveProfiles(profiles);
 
   const tab = await browser.tabs.create({ url: baseUrl, cookieStoreId });
   await setTabProfile(tab.id, profileId);
@@ -352,7 +331,7 @@ async function handleCreateProfile(name, email, password, url) {
 async function handleLaunchProfile(profileId) {
   if (containersDisabled()) return { success: false, error: "containers-disabled" };
 
-  const { profiles = {} } = await browser.storage.local.get("profiles");
+  const profiles = await getProfiles();
   const profile = profiles[profileId];
   if (!profile) return { success: false, error: "not-found" };
 
@@ -363,7 +342,7 @@ async function handleLaunchProfile(profileId) {
       profile.containerColor || "blue"
     );
     profiles[profileId] = profile;
-    await browser.storage.local.set({ profiles });
+    await saveProfiles(profiles);
   }
 
   const targetUrl =
@@ -377,7 +356,7 @@ async function handleLaunchProfile(profileId) {
 
 // Edit an existing profile's details
 async function handleEditProfile(profileId, name, email, password, url) {
-  const { profiles = {} } = await browser.storage.local.get("profiles");
+  const profiles = await getProfiles();
   const profile = profiles[profileId];
   if (!profile) return { success: false, error: "not-found" };
 
@@ -387,31 +366,26 @@ async function handleEditProfile(profileId, name, email, password, url) {
   const baseUrl = originOf(url) || url;
   profile.name = name;
   profile.email = email || "";
-  profile.passwordEnc = password ? await encryptString(key, password) : null;
+  profile.passwordEnc = await encryptPasswordIfProvided(key, password);
   delete profile.password;
   profile.url = baseUrl;
   profile.domain = hostnameOf(baseUrl);
 
   // Keep the container label in sync with the profile name.
   if (profile.cookieStoreId && !containersDisabled()) {
-    try {
-      await browser.contextualIdentities.update(profile.cookieStoreId, { name });
-    } catch (e) {
-      // Container may have been removed; it is recreated on next launch.
-    }
+    // Container may have been removed; it is recreated on next launch.
+    await trySilently(() => browser.contextualIdentities.update(profile.cookieStoreId, { name }));
   }
 
   profiles[profileId] = profile;
-  await browser.storage.local.set({ profiles });
+  await saveProfiles(profiles);
 
   // Refresh the badge on any open tabs that belong to this profile.
   if (profile.cookieStoreId && !containersDisabled()) {
-    try {
+    await trySilently(async () => {
       const tabs = await browser.tabs.query({ cookieStoreId: profile.cookieStoreId });
       tabs.forEach((t) => updateTabBadge(t.id, profile.name, profile.color));
-    } catch (e) {
-      // Ignore badge refresh failures.
-    }
+    });
   }
 
   return { success: true, profileId };
