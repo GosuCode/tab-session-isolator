@@ -1,4 +1,4 @@
-# Tab Session Isolator
+# Parallel Accounts
 
 Firefox extension for running multiple accounts side by side. Each saved profile gets its own [Firefox container](https://support.mozilla.org/en-US/kb/containers) (contextual identity), so cookies, localStorage, and login sessions stay isolated per profile — no more logging in and out to switch accounts.
 

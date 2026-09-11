@@ -231,7 +231,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "tab-session-isolator-profiles.csv";
+    a.download = "parallel-accounts-profiles.csv";
     document.body.appendChild(a);
     a.click();
     a.remove();
