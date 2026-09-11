@@ -45,4 +45,4 @@ The temporary install is removed when Firefox closes. For a persistent install, 
 
 ## License
 
-Unlicensed — add a license here if you plan to distribute.
+[MIT](LICENSE)
