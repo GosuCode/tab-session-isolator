@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2b2f3a"/>
+      <stop offset="100%" stop-color="#1a1d24"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#bg)"/>
+
+  <!-- three isolated tab shapes, each in its own color, separated to read as "isolated" -->
+  <g>
+    <path d="M20 46 h22 a6 6 0 0 1 6 6 v6 a6 6 0 0 1 -6 6 h-22 a6 6 0 0 1 -6 -6 v-6 a6 6 0 0 1 6 -6 z" fill="#4f8cff"/>
+    <path d="M53 46 h22 a6 6 0 0 1 6 6 v6 a6 6 0 0 1 -6 6 h-22 a6 6 0 0 1 -6 -6 v-6 a6 6 0 0 1 6 -6 z" fill="#37c99a"/>
+    <path d="M86 46 h22 a6 6 0 0 1 6 6 v6 a6 6 0 0 1 -6 6 h-22 a6 6 0 0 1 -6 -6 v-6 a6 6 0 0 1 6 -6 z" fill="#ff9f43"/>
+  </g>
+
+  <!-- bodies under each tab, same color family but muted, showing separate contained windows -->
+  <rect x="14" y="64" width="34" height="30" rx="7" fill="#4f8cff" opacity="0.28"/>
+  <rect x="47" y="64" width="34" height="30" rx="7" fill="#37c99a" opacity="0.28"/>
+  <rect x="80" y="64" width="34" height="30" rx="7" fill="#ff9f43" opacity="0.28"/>
+
+  <rect x="14" y="64" width="34" height="30" rx="7" fill="none" stroke="#4f8cff" stroke-width="2.5"/>
+  <rect x="47" y="64" width="34" height="30" rx="7" fill="none" stroke="#37c99a" stroke-width="2.5"/>
+  <rect x="80" y="64" width="34" height="30" rx="7" fill="none" stroke="#ff9f43" stroke-width="2.5"/>
+</svg>
