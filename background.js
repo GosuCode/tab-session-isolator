@@ -508,19 +508,37 @@ async function importProfiles(password, csvText) {
   const errors = [];
   let imported = 0;
 
+  // Same name + email + site counts as a duplicate, whether it already
+  // exists or repeats earlier in this same CSV.
+  const dedupeKey = (name, email, url) =>
+    [name, email, hostnameOf(originOf(url) || url)]
+      .map((v) => String(v || "").trim().toLowerCase())
+      .join("|");
+
+  const seen = new Set(
+    Object.values(profiles).map((p) => dedupeKey(p.name, p.email, p.url))
+  );
+
   for (const row of rows) {
+    const name = row.name || row.url || "Imported profile";
+    const key = dedupeKey(name, row.username, row.url);
+    if (seen.has(key)) {
+      errors.push({ row: name, error: "duplicate" });
+      continue;
+    }
     try {
       const profile = await buildProfileRecord({
-        name: row.name || row.url || "Imported profile",
+        name,
         email: row.username,
         password: row.password,
         url: row.url,
         key: verify.key
       });
       profiles[profile.id] = profile;
+      seen.add(key);
       imported++;
     } catch (e) {
-      errors.push({ row: row.name || row.url || "(unnamed)", error: errorCode(e) });
+      errors.push({ row: name, error: errorCode(e) });
     }
   }
 

@@ -41,6 +41,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   const toastMsg = document.getElementById("toastMsg");
   const toastClose = document.getElementById("toastClose");
 
+  // Firefox closes the browserAction popup the instant the native file-picker
+  // dialog steals focus, killing the import form before the user can pick a
+  // file. Import instead opens this same page in a standalone window, which
+  // isn't subject to that auto-close behavior.
+  const standaloneImport = new URLSearchParams(location.search).get("vaultAction") === "import";
+
+  async function closeStandaloneWindow() {
+    try {
+      const win = await new Promise((resolve) => chrome.windows.getCurrent(resolve));
+      if (win && win.id != null) {
+        chrome.windows.remove(win.id);
+        return;
+      }
+    } catch (e) {
+      // fall through
+    }
+    window.close();
+  }
+
   let toastTimer = null;
   function showToast(message) {
     toastMsg.textContent = message;
@@ -187,9 +206,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   exportBtn.addEventListener("click", () => openVaultAction("export"));
-  importBtn.addEventListener("click", () => openVaultAction("import"));
+  importBtn.addEventListener("click", () => {
+    // See standaloneImport comment above — open a real window instead of
+    // showing the file picker inline, or the popup vanishes mid-pick.
+    chrome.windows.create({
+      url: chrome.runtime.getURL("popup.html?vaultAction=import"),
+      type: "popup",
+      width: 380,
+      height: 480,
+    });
+    window.close();
+  });
 
   vaultActionCancelBtn.addEventListener("click", async () => {
+    if (standaloneImport) {
+      await closeStandaloneWindow();
+      return;
+    }
     await refreshVaultUI();
   });
 
@@ -233,9 +266,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         showToast(res && res.error === "wrong-password" ? "Incorrect master password." : "Could not import profiles.");
         return;
       }
-      const failedPart = res.errors && res.errors.length ? `, ${res.errors.length} failed` : "";
+      const dupeCount = res.errors ? res.errors.filter((e) => e.error === "duplicate").length : 0;
+      const otherFailCount = res.errors ? res.errors.length - dupeCount : 0;
+      const parts = [];
+      if (dupeCount) parts.push(`${dupeCount} duplicate${dupeCount === 1 ? "" : "s"} skipped`);
+      if (otherFailCount) parts.push(`${otherFailCount} failed`);
+      const failedPart = parts.length ? `, ${parts.join(", ")}` : "";
       showToast(`Imported ${res.imported}/${res.total} profile(s)${failedPart}.`);
       loadProfiles();
+      if (standaloneImport) {
+        // Brief pause so the toast is readable before the window vanishes.
+        setTimeout(closeStandaloneWindow, 1200);
+        return;
+      }
     }
 
     await refreshVaultUI();
@@ -722,6 +765,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
-  refreshVaultUI();
+  await refreshVaultUI();
   loadProfiles();
+
+  if (standaloneImport) {
+    const status = await sendMessage({ action: "VAULT_STATUS" });
+    if (status && status.exists) {
+      openVaultAction("import");
+    } else {
+      showToast("Set up the vault before importing.");
+    }
+  }
 });
